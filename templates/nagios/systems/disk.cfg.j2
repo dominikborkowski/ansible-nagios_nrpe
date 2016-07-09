@@ -1,0 +1,37 @@
+#
+# {{ ansible_managed }}
+#
+# nagios definition for {{ inventory_hostname }}
+
+
+#######################################################################################################################
+# filesystem checks
+#
+# NOTE: each '/'' in the mount point is replaced with '_' for the check definition
+
+{% if nagios_nrpe_enable_commands_disk %}
+{%- for fs in ansible_mounts %}
+# service definition - disk - {{ fs.device }} mounted on {{ fs.mount }} with {{ fs.fstype }}
+define service{
+    use                     generic-service
+    host_name               {{ inventory_hostname }}
+    service_description     Filesystem {{ fs.mount }}
+    is_volatile             0
+    check_period            {{ nagios_nrpe_check_period }}
+    max_check_attempts      3
+    normal_check_interval   2
+    retry_check_interval    1
+    contact_groups          {{ nagios_contact_groups | join(",") }}
+    notification_interval   24
+    notification_period     {{ nagios_nrpe_notification_period }}
+    notification_options    w,u,c,r
+    check_command           check_nrpe!check_disk{{ fs.mount | replace ('/','_')}}
+    event_handler           force_nrpe_check
+    process_perf_data       1
+}
+
+{% endfor %}
+{% endif %}
+
+# end of section
+#######################################################################################################################

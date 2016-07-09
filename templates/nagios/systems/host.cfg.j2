@@ -1,0 +1,48 @@
+#
+# {{ ansible_managed }}
+#
+# nagios definition for {{ inventory_hostname }}
+
+#######################################################################################################################
+# host definitions
+#
+
+# host {{ inventory_hostname }}
+define host {
+    contact_groups          {{ nagios_contact_groups | join(",") }}
+    hostgroups              {{ nagios_hostgroups | join(",") }},os-{{ ansible_distribution }},vm-{{ ansible_virtualization_role }}-{{ ansible_virtualization_type }}
+    use                     ping-host
+    host_name               {{ inventory_hostname }}
+    alias                   {{ inventory_hostname.split('.')[0] }}
+    address                 {{ ansible_default_ipv4.address }}
+{% if not inventory_hostname == 'marach.bioinformatics.vt.edu' %}
+    parents                 router-128.173.97.1
+{% endif %}
+    notification_period     {{ nagios_nrpe_notification_period }}
+    notification_options    d,u,r
+}
+
+#######################################################################################################################
+# service definitions
+#
+
+# ping check
+define service{
+    use                     generic-service
+    host_name               {{ inventory_hostname }}
+    service_description     PING
+    is_volatile             0
+    check_period            {{ nagios_nrpe_check_period }}
+    max_check_attempts      3
+    normal_check_interval   5
+    retry_check_interval    1
+    contact_groups          {{ nagios_contact_groups | join(",") }}
+    notification_interval   240
+    notification_period     {{ nagios_nrpe_notification_period }}
+    notification_options    c,r
+    check_command           check_ping!100.0,20%!500.0,60%
+    process_perf_data       1
+}
+
+# end of file
+#######################################################################################################################

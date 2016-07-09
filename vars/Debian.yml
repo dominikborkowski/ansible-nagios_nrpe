@@ -1,0 +1,26 @@
+---
+### Variables specific to deployment on Debian
+
+# loaded via the following function in ../tasks/main.yml:
+#
+# # Load file with variables based on the OS type, or use default if others are not found
+# - include_vars: "{{ item }}"
+#   with_first_found:
+#    - "../vars/{{ ansible_distribution }}.yml"
+#    - "../vars/{{ ansible_os_family }}.yml"
+#    - "../vars/default.yml"
+
+# examples:
+# ntp_daemon: "ntpd"
+
+nagios_nrpe_packages:
+  - nagios-nrpe-plugin
+  - nagios-plugins
+  - nagios-plugins-basic
+  - nagios-plugons-standard
+
+# Zabbix service name
+nagios_nrpe_daemon: nrpe
+
+# Package states: present or latest
+nagios_nrpe_pkg_state: latest

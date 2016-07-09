@@ -1,0 +1,22 @@
+---
+# Handlers
+
+# examples, using variables declared in ../vars/{{ ansible_os_family }}.yml
+#
+# - name: Restart webserver
+#   service: "name={{ php_webserver_daemon }} state=restarted"
+#   when: php_enable_webserver
+#
+# - name: Restart ntp
+#   service: "name={{ ntp_daemon }} state=restarted"
+
+- name: Restart nagios_nrpe
+  service: "name={{ nagios_nrpe_daemon }} state=restarted"
+
+- name: Restart nagios server
+  service: "name={{ nagios_server_daemon }} state=restarted"
+  delegate_to: "{{ nagios_server_address }}"
+
+- name: Reload nagios server
+  service: "name={{ nagios_server_daemon }} state=reloaded"
+  delegate_to: "{{ nagios_server_address }}"

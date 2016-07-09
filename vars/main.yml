@@ -1,0 +1,11 @@
+---
+# Default variables
+
+# Variables here will NEVER be overwritten by inventory variables
+# To have variables that will be overwritten by inventory, use ../defaults/main.yml
+
+# examples
+# php_enablerepo: ""
+# php_memory_limit: "256M"
+# http_port: "80"
+

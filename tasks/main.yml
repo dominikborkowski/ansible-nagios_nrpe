@@ -1,0 +1,149 @@
+---
+### Tasks
+
+# Load file with variables based on the OS type, or use default if others are not found
+# in order: CentOS-6.5.yml, CentOS-6.yml, RedHat.yml, default.yml
+- include_vars: "{{ item }}"
+  with_first_found:
+   - "../vars/{{ ansible_distribution }}-{{ ansible_distribution_version }}.yml"
+   - "../vars/{{ ansible_distribution }}-{{ ansible_distribution_major_version }}.yml"
+   - "../vars/{{ ansible_distribution }}.yml"
+   - "../vars/{{ ansible_os_family }}.yml"
+   - "../vars/default.yml"
+  tags: nagios_nrpe
+
+
+- name: Debian | Install nagios_nrpe packages
+  apt: pkg={{ item }} state={{ nagios_nrpe_pkg_state }}
+  with_items: "{{ nagios_nrpe_packages}}"
+  when: ansible_os_family == 'Debian'
+  tags: nagios_nrpe
+
+- name: RedHat | Install nagios_nrpe packages
+  yum: name={{ item }} state={{ nagios_nrpe_pkg_state }} enablerepo={{ nagios_nrpe_enablerepo }}
+  with_items: "{{ nagios_nrpe_packages}}"
+  when: ansible_os_family == 'RedHat'
+  tags: nagios_nrpe
+
+- name: Suse | Install nagios_nrpe packages
+  zypper: pkg={{ item }} state={{ nagios_nrpe_pkg_state }}
+  with_items: "{{ nagios_nrpe_packages}}"
+  when: ansible_os_family == 'Suse'
+  tags: nagios_nrpe
+
+- name: Configure nagios_nrpe
+  template: >
+    src=nrpe.cfg.j2 dest={{ nagios_nrpe_conf }}
+    owner=root group=root mode=644
+  notify: Restart nagios_nrpe
+  tags: nagios_nrpe
+
+- name: Check if we have openamange running
+  shell: "pkill -0 dsm_sa_datamgrd || echo FAIL"
+  ignore_errors: yes
+  register: openmanage_running
+  changed_when: False
+  tags: nagios_nrpe
+
+- name: Enable OpenManage checks
+  set_fact: nagios_nrpe_enable_commands_openmanage="True"
+  ignore_errors: yes
+  when: not openmanage_running.stdout == "FAIL"
+  tags: nagios_nrpe
+
+- name: Create nagios_nrpe optional config directory
+  file: path={{ nagios_nrpe_include_dir }} state=directory
+  tags: nagios_nrpe
+
+- name: Copy additional configurations
+  template: >
+    src={{ item }} dest={{ nagios_nrpe_include_dir }}/
+    owner=root group=root mode=644
+  with_fileglob: ../templates/nrpe.d/*.cfg
+  notify: Restart nagios_nrpe
+  tags: nagios_nrpe
+
+- name: Start nagios_nrpe service
+  service: name={{ nagios_nrpe_daemon }} state={{ nagios_nrpe_service_state }} enabled={{ nagios_nrpe_service_enabled }}
+  tags: nagios_nrpe
+
+# small note: this unfortunately doesn't work, since it will just create a file named '.cfg'
+# - "{{ 'vm-' + ansible_virtualization_type  if ansible_virtualization_type == 'guest' else None }}"
+- name: Nagios server | Create hostgroup configs
+  template: >
+    src=nagios/hostgroup.cfg.j2 dest={{ nagios_server_groups_configs_path }}/{{ item }}.cfg
+    owner={{ nagios_server_config_owner }} group={{ nagios_server_config_group }}
+    mode={{ nagios_server_config_file_perms }}
+  with_items:
+    - "{{ nagios_hostgroups }}"
+    - "os-{{ ansible_distribution }}"
+    - "vm-{{ ansible_virtualization_role }}-{{ ansible_virtualization_type }}"
+  delegate_to: "{{ nagios_server_address }}"
+  tags: nagios_nrpe
+
+- name: Nagios server | Create system directory
+  file: >
+    path={{ nagios_server_hosts_configs_path }}/{{ inventory_hostname }}
+    state=directory owner={{ nagios_server_config_owner }} group={{ nagios_server_config_group }}
+    mode={{ nagios_server_config_dir_perms }}
+  delegate_to: "{{ nagios_server_address }}"
+  tags: nagios_nrpe
+
+# - name: Nagios server | remove host from linux-servers.cfg
+#   replace:
+#     dest=/etc/nagios/vbi/hosts/linux-servers.cfg
+#     regexp='define\shost.{0,5}{.*(\n.*){1,5}host_name\s*{{ inventory_hostname.split('.')[0] }}(\n.*){1,7}}'
+#     replace='\1# {{ inventory_hostname.split('.')[0] }} was removed automatically by ansible on {{ ansible_date_time.iso8601 }}'
+#     backup=yes
+#   delegate_to: "{{ nagios_server_address }}"
+#   tags: nagios_nrpe
+
+# remember to double escape inside regexes when using them inside 'with_items'
+- name: Nagios server | remove host from linux-servers.cfg
+  replace:
+    backup="no"
+    dest="{{ item.dest }}" regexp="{{ item.regexp }}"
+    replace='\t# {{ inventory_hostname.split('.')[0] }} removed by ansible on {{ ansible_date_time.iso8601 }}'
+  with_items:
+    - { dest: "/etc/nagios/vbi/hosts/linux-servers.cfg", regexp: "define\\shost.{0,5}{.*(\n.*){1,5}host_name\\s*{{ inventory_hostname.split('.')[0] }}(\n.*){1,7}}"  }
+    - { dest: "/etc/nagios/vbi/hostgroups/legacy-linux-servers.cfg", regexp: ".*members\\s*{{ inventory_hostname.split('.')[0] }}\n"  }
+  delegate_to: "{{ nagios_server_address }}"
+  notify: Reload nagios server
+  tags: nagios_nrpe
+
+- name: Nagios server | Create system configs
+  template: >
+    src={{ item }}
+    dest={{ nagios_server_hosts_configs_path }}/{{ inventory_hostname }}/{{ item | basename | replace(".j2", "") }}
+    owner={{ nagios_server_config_owner }} group={{ nagios_server_config_group }}
+    mode={{ nagios_server_config_file_perms }}
+  with_fileglob: ../templates/nagios/systems/*
+  delegate_to: "{{ nagios_server_address }}"
+  tags: nagios_nrpe
+  notify: Reload nagios server
+
+- name: Nagios server | check if git commit is necessary
+  command: git status .
+  args:
+    chdir: "{{ nagios_server_hosts_configs_path }}/{{ inventory_hostname }}"
+  register: git_check
+  changed_when: "'nothing to commit' not in git_check.stdout"
+  when: nagios_server_use_git
+  delegate_to: "{{ nagios_server_address }}"
+  tags: nagios_nrpe
+
+- name: Nagios server | adding changes to git
+  command: git add "{{ nagios_server_hosts_configs_path }}/{{ inventory_hostname }}"/*
+  args:
+    chdir: "{{ nagios_server_hosts_configs_path }}/{{ inventory_hostname }}"
+  when: "git_check.stdout is defined and  'nothing to commit' not in git_check.stdout and nagios_server_use_git"
+  delegate_to: "{{ nagios_server_address }}"
+  tags: nagios_nrpe
+
+- name: Nagios server | committing changes to git
+  command: git commit -m "Ansible updated {{ inventory_hostname }}"
+  args:
+    chdir: "{{ nagios_server_hosts_configs_path }}/{{ inventory_hostname }}"
+  when: "git_check.stdout is defined and 'nothing to commit' not in git_check.stdout and nagios_server_use_git"
+  delegate_to: "{{ nagios_server_address }}"
+  tags: nagios_nrpe

@@ -1,0 +1,177 @@
+---
+# Default variables
+
+# Variables here will be overwritten by variables declared ANYWHERE else.
+# To have variables that cannot be overwritten by inventory, use ../vars/main.yml
+
+# examples
+# php_enablerepo: ""
+# php_memory_limit: "256M"
+# http_port: "80"
+
+
+# list of packages to install
+nagios_nrpe_packages:
+    - nagios_nrpe
+
+# do we enable any repositories?
+nagios_nrpe_enablerepo: ""
+
+# where is our main configuration file
+nagios_nrpe_conf: /etc/nagios/nrpe.cfg
+
+# where are nagios plugins stored?
+nagios_nrpe_nagios_plugins_dir: /usr/lib64/nagios/plugins
+
+# NRPE service name
+nagios_nrpe_daemon: nrpe
+
+# Package states: installed or latest
+nagios_nrpe_pkg_state: latest
+
+# Service states: started or stopped
+nagios_nrpe_service_state: started
+
+# Service enabled: yes or no
+nagios_nrpe_service_enabled: yes
+
+
+###############################################################################
+# NAGIOS - server related options
+# - these exist here only as a failback if you do not configure them elesewhere
+
+nagios_server_address: 127.0.0.1
+nagios_contact_groups:
+  - foo_contact_group_admins
+nagios_hostgroups:
+  - foo_hostgroup
+nagios_server_hosts_configs_path: /etc/nagios/hosts.d
+nagios_server_groups_configs_path: /etc/nagios/groups.d
+nagios_server_config_owner: root
+nagios_server_config_group: root
+nagios_server_config_file_perms: 0664
+nagios_server_config_dir_perms: 2775
+nagios_server_use_git: False
+
+###############################################################################
+# NRPE - main configuration options
+#
+nagios_nrpe_log_facility: daemon
+nagios_nrpe_pid_file: /var/run/nrpe/nrpe.pid
+nagios_nrpe_server_port: 5666
+nagios_nrpe_server_address: ''
+nagios_nrpe_nrpe_user: nrpe
+nagios_nrpe_nrpe_group: nrpe
+nagios_nrpe_allowed_hosts: 127.0.0.1
+nagios_nrpe_dont_blame_nrpe: 0
+nagios_nrpe_allow_bash_command_substitution: 0
+nagios_nrpe_command_prefix: ""
+nagios_nrpe_debug: 0
+nagios_nrpe_command_timeout: 60
+nagios_nrpe_connection_timeout: 300
+nagios_nrpe_allow_weak_random_seed: ''
+nagios_nrpe_include_dir: /etc/nrpe.d/
+
+
+###############################################################################
+
+# enable major plugin sections
+nagios_nrpe_enable_commands_openmanage: False
+nagios_nrpe_enable_commands_disk: True
+
+
+# what filesystem types will we monitor?
+nagios_nrpe_filesystem_types:
+  - ext2
+  - ext3
+  - ext4
+  - xfs
+  - jfs
+  - zfs
+  - reiserfs
+  - simfs
+
+# our time ranges are:
+# - 24x7
+# - none
+# - us-holidays
+# - 24x7_sans_holidays
+# - workhours
+# - extendedhours
+# - nonworkhours
+# what's our global check window?
+nagios_nrpe_check_period: 24x7
+# what's our global notification window?
+nagios_nrpe_notification_period: workhours
+
+###############################################################################
+# NRPE - commands
+#
+
+# generic commands
+nagios_nrpe_commands_generic:
+  - name: check_users
+    description: Number of logged in users
+    plugin: check_users
+    options: >
+      -w {{ ansible_processor_vcpus | int * 10 }}
+      -c {{ ansible_processor_vcpus | int * 15 }}
+    notification_period: workhours
+  - name: check_load
+    description: Load average
+    plugin: check_load
+    options: >
+      -w {{ ansible_processor_vcpus | int + 14 }},{{ ansible_processor_vcpus | int + 9 }},{{ ansible_processor_vcpus | int + 4 }}
+      -c {{ ansible_processor_vcpus | int + 29 }},{{ ansible_processor_vcpus | int + 24 }},{{ ansible_processor_vcpus | int + 19 }}
+  - name: check_zombie_procs
+    description: Number of zombie processes
+    plugin: check_procs
+    options: >
+      -w {{ ansible_processor_vcpus | int + 5 }}
+      -c {{ ansible_processor_vcpus | int + 10 }}
+      -s Z
+    notification_period: workhours
+  - name: check_total_procs
+    description: Total number of processes
+    plugin: check_procs
+    options: >
+      -w {{ ansible_processor_vcpus | int * 100 + 200 }}
+      -c {{ ansible_processor_vcpus | int * 125 + 400 }}
+    notification_period: workhours
+  - name: check_swap
+    description: Swap utilization
+    plugin: check_swap
+    options: >
+      -w 20%
+      -c 10%
+    notification_period: workhours
+  - name: check_ntp_time
+    description: NTP time drift
+    plugin: check_ntp_time
+    options: >
+      -H ntp.vt.edu
+      -w 2.5
+      -c 10.0
+    notification_period: none
+
+
+###############################################################################
+
+# original defaults
+# nagios_nrpe_commands_generic:
+#   - name: check_users
+#     description: Check number of logged in users
+#     plugin: check_users
+#     options: "-w 5 -c 10"
+#   - name: check_load
+#     description: Check load average
+#     plugin: check_load
+#     options: "-w 15,10,5 -c 30,25,20"
+#   - name: check_zombie_procs
+#     description: Check number of zombie processes
+#     plugin: check_zombie_procs
+#     options: "-w 5 -c 10 -s Z"
+#   - name: check_total_procs
+#     description: Check total number of processes
+#     plugin: check_total_procs
+#     options: "-w 250 -c 300"
